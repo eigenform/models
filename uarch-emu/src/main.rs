@@ -4,44 +4,36 @@ pub mod core;
 pub mod uarch;
 pub mod mem;
 
-use crate::rv32::*;
-use crate::core::*;
-use crate::mem::*;
 
-use crate::uarch::simple::*;
-use crate::uarch::common::*;
+#[cfg(test)]
+mod uarch_simple {
+    use std::rc::Rc;
+    use std::cell::RefCell;
+    use crate::mem::*;
+    use crate::uarch::common::*;
+    use crate::uarch::simple::SimplePipeline;
 
-use std::rc::Rc;
-use std::cell::RefCell;
+    const INITIAL_REGS: [u32; 8] = [ 0, 1, 2, 3, 4, 5, 6, 7 ];
 
-fn main() {
-    let mut pc = 0x0000_0000u32;
+    #[test]
+    fn test() {
+        let dmem = Rc::new(RefCell::new(DataMemory::new()));
+        let rf = Rc::new(RefCell::new(
+                RegisterFile::new(8, Some(&INITIAL_REGS))
+        ));
+        let mut p = SimplePipeline::new(rf.clone(), dmem.clone());
 
-    let rf = Rc::new(RefCell::new(RegisterFile::new()));
-    let dmem = Rc::new(RefCell::new(DataMemory::new()));
-
-    let mut if_stage = FetchStage::new();
-    let mut id_stage = DecodeStage::new(rf.clone());
-    let mut ex_stage = ExecutionStage::new();
-    let mut me_stage = MemoryStage::new(dmem.clone());
-    let mut wb_stage = WritebackStage::new(rf.clone());
-
-    for cycle in 0..32 {
-        wb_stage.execute(
-            me_stage.execute(
-                ex_stage.execute(
-                    id_stage.execute(
-                        if_stage.execute(pc)
-                    )
-                )
-            )
-        );
-
-        println!("{:08x}: {:08x?}", pc, rf);
-        pc += 4;
+        for _cycle in 0..32 {
+            println!("{:08x?}", rf.borrow());
+            p.step();
+            println!("");
+        }
     }
 }
 
 
+
+fn main() {
+}
 
 

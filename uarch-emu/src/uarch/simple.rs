@@ -2,7 +2,6 @@
 use std::ops::{BitAnd, BitOr, BitXor};
 
 use crate::rv32::*;
-use crate::core::*;
 use crate::uarch::common::*;
 use crate::mem::*;
 
@@ -11,6 +10,45 @@ pub trait PipelineStage {
     type Out;
     fn execute(&mut self, i: Self::In) -> Self::Out;
 }
+
+pub struct SimplePipeline {
+    pub cyc: usize,
+    pub pc: u32,
+    if_stage: FetchStage,
+    id_stage: DecodeStage,
+    ex_stage: ExecutionStage,
+    me_stage: MemoryStage,
+    wb_stage: WritebackStage,
+}
+impl SimplePipeline {
+    pub fn new(rf: PipelineResource<RegisterFile>,
+               dmem: PipelineResource<DataMemory>) -> Self {
+        Self {
+            cyc: 0,
+            pc: 0,
+            if_stage: FetchStage::new(),
+            id_stage: DecodeStage::new(rf.clone()),
+            ex_stage: ExecutionStage::new(),
+            me_stage: MemoryStage::new(dmem.clone()),
+            wb_stage: WritebackStage::new(rf.clone()),
+        }
+    }
+    pub fn step(&mut self) {
+        println!("[IF] {:08x?}", self.pc);
+        let f = self.if_stage.execute(self.pc);
+        println!("[ID] {:x?}", &f);
+        let d = self.id_stage.execute(f);
+        println!("[EX] {:x?}", &d);
+        let x = self.ex_stage.execute(d);
+        println!("[ME] {:x?}", &x);
+        let m = self.me_stage.execute(x);
+        println!("[WB] {:x?}", &m);
+        let w = self.wb_stage.execute(m);
+        self.pc += 4;
+        self.cyc += 1;
+    }
+}
+
 
 
 pub struct FetchStage {}

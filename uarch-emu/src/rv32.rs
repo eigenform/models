@@ -1,5 +1,5 @@
 
-use crate::core;
+use crate::uarch::common;
 
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
@@ -10,12 +10,12 @@ pub enum RvWidth {
     Half,
     Word,
 }
-impl core::FrontendAccessWidth for RvWidth {
-    fn to_width(&self) -> core::Width {
+impl common::FrontendAccessWidth for RvWidth {
+    fn to_width(&self) -> common::Width {
         match self {
-            Self::Byte => core::Width::Byte,
-            Self::Half => core::Width::Half,
-            Self::Word => core::Width::Word,
+            Self::Byte => common::Width::Byte,
+            Self::Half => common::Width::Half,
+            Self::Word => common::Width::Word,
         }
     }
 }
@@ -33,19 +33,19 @@ pub enum RvALUOp {
     Or,
     And,
 }
-impl core::FrontendALUOp for RvALUOp {
-    fn to_alu_op(&self) -> core::ALUOp {
+impl common::FrontendALUOp for RvALUOp {
+    fn to_alu_op(&self) -> common::ALUOp {
         match self {
-            Self::Add => core::ALUOp::Add,
-            Self::Sub => core::ALUOp::Sub,
-            Self::Xor => core::ALUOp::Xor,
-            Self::Or => core::ALUOp::Or,
-            Self::And => core::ALUOp::And,
-            Self::Slt => core::ALUOp::LtSigned,
-            Self::Sltu => core::ALUOp::LtUnsigned,
-            Self::Sll => core::ALUOp::Sll,
-            Self::Srl => core::ALUOp::Srl,
-            Self::Sra => core::ALUOp::Sra,
+            Self::Add => common::ALUOp::Add,
+            Self::Sub => common::ALUOp::Sub,
+            Self::Xor => common::ALUOp::Xor,
+            Self::Or => common::ALUOp::Or,
+            Self::And => common::ALUOp::And,
+            Self::Slt => common::ALUOp::LtSigned,
+            Self::Sltu => common::ALUOp::LtUnsigned,
+            Self::Sll => common::ALUOp::Sll,
+            Self::Srl => common::ALUOp::Srl,
+            Self::Sra => common::ALUOp::Sra,
         }
     }
 }
