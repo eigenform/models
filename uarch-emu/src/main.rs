@@ -11,7 +11,7 @@ mod uarch_simple {
     use std::cell::RefCell;
     use crate::mem::*;
     use crate::uarch::common::*;
-    use crate::uarch::simple::SimplePipeline;
+    use crate::uarch::simple::SingleCycleMachine;
 
     const INITIAL_REGS: [u32; 8] = [ 0, 1, 2, 3, 4, 5, 6, 7 ];
 
@@ -21,9 +21,11 @@ mod uarch_simple {
         let rf = Rc::new(RefCell::new(
                 RegisterFile::new(8, Some(&INITIAL_REGS))
         ));
-        let mut p = SimplePipeline::new(rf.clone(), dmem.clone());
+        let mut p = SingleCycleMachine::new(
+            rf.clone(), dmem.clone()
+        );
 
-        for _cycle in 0..32 {
+        for _cycle in 0..8 {
             println!("{:08x?}", rf.borrow());
             p.step();
             println!("");

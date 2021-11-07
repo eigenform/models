@@ -4,6 +4,112 @@ use crate::uarch::common;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 
+#[repr(usize)]
+pub enum RvOpcode {
+    LOAD       = 0b00000, // [lb, lh, lw, lbu, lhu]
+    LOAD_FP    = 0b00001,
+    CUSTOM_0   = 0b00010,
+    MISC_MEM   = 0b00011, // [fence, fence.i]
+    OP_IMM     = 0b00100, // [addi, slti, sltiu, xori, ori, andi]
+    AUIPC      = 0b00101, 
+    OP_IMM_32  = 0b00110,
+    STORE      = 0b01000, // [sb, sh, sw]
+    STORE_FP   = 0b01001,
+    CUSTOM_1   = 0b01010,
+    AMO        = 0b01011,
+    OP         = 0b01100, // [add, sub, sll, slt, sltu, xor, srl, sra, or, and]
+    LUI        = 0b01101,
+    OP_32      = 0b01110,
+    MADD       = 0b10000,
+    MSUB       = 0b10001,
+    NMSUB      = 0b10010,
+    NMADD      = 0b10011,
+    OP_FP      = 0b10100,
+    RES_0      = 0b10101,
+    CUSTOM_2   = 0b10110,
+    BRANCH     = 0b11000, // [beq, bne, blt, bge, bltu, bgeu]
+    JALR       = 0b11001,
+    RES_1      = 0b11010,
+    JAL        = 0b11011,
+    SYSTEM     = 0b11100,
+    RES_2      = 0b11101,
+    CUSTOM_3   = 0b11110,
+}
+impl From<u32> for RvOpcode {
+    fn from(x: u32) -> Self {
+        match x {
+         0b00000 => Self::LOAD,
+         0b00001 => Self::LOAD_FP,
+         0b00010 => Self::CUSTOM_0,
+         0b00011 => Self::MISC_MEM,
+         0b00100 => Self::OP_IMM,
+         0b00101 => Self::AUIPC,
+         0b00110 => Self::OP_IMM_32,
+         0b01000 => Self::STORE,
+         0b01001 => Self::STORE_FP,
+         0b01010 => Self::CUSTOM_1,
+         0b01011 => Self::AMO,
+         0b01100 => Self::OP,
+         0b01101 => Self::LUI,
+         0b01110 => Self::OP_32,
+         0b10000 => Self::MADD,
+         0b10001 => Self::MSUB,
+         0b10010 => Self::NMSUB,
+         0b10011 => Self::NMADD,
+         0b10100 => Self::OP_FP,
+         0b10101 => Self::RES_0,
+         0b10110 => Self::CUSTOM_2,
+         0b11000 => Self::BRANCH,
+         0b11001 => Self::JALR,
+         0b11010 => Self::RES_1,
+         0b11011 => Self::JAL,
+         0b11100 => Self::SYSTEM,
+         0b11101 => Self::RES_2,
+         0b11110 => Self::CUSTOM_3,
+         _ => unimplemented!(),
+        }
+    }
+}
+
+
+#[repr(transparent)]
+struct RvEncoding(pub u32);
+impl RvEncoding {
+    fn opcode(&self) -> RvOpcode {
+        RvOpcode::from(
+            (self.0 & 0b0000_000_00000_00000_000_00000_11111_00) >> 2
+        )
+    }
+    fn rd(&self) -> RvReg {
+        RvReg(
+            ((self.0 & 0b0000_000_00000_00000_000_11111_00000_00) >> 7)
+            as usize
+        )
+    }
+    fn f3(&self) -> usize {
+        ((self.0 & 0b0000_000_00000_00000_111_00000_00000_00) >> 12)
+            as usize
+    }
+    fn rs1(&self) -> RvReg {
+        RvReg(
+            ((self.0 & 0b0000_000_00000_11111_000_00000_00000_00) >> 15)
+            as usize
+        )
+    }
+    fn rs2(&self) -> RvReg {
+        RvReg(
+            ((self.0 & 0b0000_000_11111_00000_000_00000_00000_00) >> 20)
+            as usize
+        )
+    }
+    fn f7(&self) -> usize {
+        ((self.0 & 0b1111_111_00000_00000_000_00000_00000_00) >> 25)
+            as usize
+    }
+}
+
+
+
 #[derive(Debug, Clone, Copy)]
 pub enum RvWidth {
     Byte,

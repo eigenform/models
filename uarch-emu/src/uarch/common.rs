@@ -8,6 +8,17 @@ use std::rc::Rc;
 /// Type alias for shared references to resources.
 pub type PipelineResource<T> = Rc<RefCell<T>>;
 
+pub trait SimplePipelineStage {
+    type In;
+    type Out;
+
+    /// Transform inputs to outputs.
+    fn execute(&mut self, i: Self::In) -> Self::Out;
+    fn stall(&mut self);
+    fn unstall(&mut self);
+}
+
+
 /// Architectural register file.
 #[derive(Debug)]
 pub struct RegisterFile {
@@ -46,28 +57,12 @@ pub trait FrontendAccessWidth {
     fn to_width(&self) -> Width;
 }
 
-/// Arithmetic/logical operations supported by the emulated machine.
-#[derive(Debug)]
-pub enum ALUOp {
-    Add,
-    Sub,
-    And,
-    Or,
-    Xor,
-    Sll,
-    Srl,
-    Sra,
-    LtUnsigned,
-    LtSigned,
-}
 
-
-/// Widths of memory access operations supported by the machine.
+/// An element in the instruction stream.
 #[derive(Debug)]
-pub enum Width {
-    Byte,
-    Half,
-    Word,
+pub struct Instruction {
+    pub id: usize,
+    pub op: Op,
 }
 
 /// Distinct types of instructions supported by the machine.
@@ -92,6 +87,29 @@ pub enum Effect {
     MemLoad(usize, u32, Width),
     /// Store a value to memory (value, addr, width).
     MemStore(u32, u32, Width),
+}
+
+/// Arithmetic/logical operations supported by the emulated machine.
+#[derive(Debug)]
+pub enum ALUOp {
+    Add,
+    Sub,
+    And,
+    Or,
+    Xor,
+    Sll,
+    Srl,
+    Sra,
+    LtUnsigned,
+    LtSigned,
+}
+
+/// Widths of memory access operations supported by the machine.
+#[derive(Debug)]
+pub enum Width {
+    Byte,
+    Half,
+    Word,
 }
 
 

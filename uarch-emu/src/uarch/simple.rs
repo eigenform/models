@@ -1,3 +1,4 @@
+//! Simple single-cycle machine.
 
 use std::ops::{BitAnd, BitOr, BitXor};
 
@@ -5,13 +6,7 @@ use crate::rv32::*;
 use crate::uarch::common::*;
 use crate::mem::*;
 
-pub trait PipelineStage {
-    type In;
-    type Out;
-    fn execute(&mut self, i: Self::In) -> Self::Out;
-}
-
-pub struct SimplePipeline {
+pub struct SingleCycleMachine {
     pub cyc: usize,
     pub pc: u32,
     if_stage: FetchStage,
@@ -20,7 +15,7 @@ pub struct SimplePipeline {
     me_stage: MemoryStage,
     wb_stage: WritebackStage,
 }
-impl SimplePipeline {
+impl SingleCycleMachine {
     pub fn new(rf: PipelineResource<RegisterFile>,
                dmem: PipelineResource<DataMemory>) -> Self {
         Self {
@@ -34,16 +29,22 @@ impl SimplePipeline {
         }
     }
     pub fn step(&mut self) {
+
         println!("[IF] {:08x?}", self.pc);
         let f = self.if_stage.execute(self.pc);
+
         println!("[ID] {:x?}", &f);
         let d = self.id_stage.execute(f);
+
         println!("[EX] {:x?}", &d);
         let x = self.ex_stage.execute(d);
+
         println!("[ME] {:x?}", &x);
         let m = self.me_stage.execute(x);
+
         println!("[WB] {:x?}", &m);
         let w = self.wb_stage.execute(m);
+
         self.pc += 4;
         self.cyc += 1;
     }
@@ -51,30 +52,38 @@ impl SimplePipeline {
 
 
 
-pub struct FetchStage {}
-impl FetchStage {
-    pub fn new() -> Self { Self { } }
+pub struct FetchStage {
+    stall: bool,
 }
-impl PipelineStage for FetchStage {
+impl FetchStage {
+    pub fn new() -> Self { Self { stall: false, } }
+}
+impl SimplePipelineStage for FetchStage {
     type In  = u32;
     type Out = RvInstr;
     fn execute(&mut self, i: Self::In) -> Self::Out {
         rand::random()
     }
+    fn stall(&mut self) { self.stall = true }
+    fn unstall(&mut self) { self.stall = false }
 }
 
 pub struct DecodeStage {
+    stall: bool,
+    next_id: usize,
     rf: PipelineResource<RegisterFile>,
 }
 impl DecodeStage {
-    pub fn new(rf: PipelineResource<RegisterFile>) -> Self { Self { rf } }
+    pub fn new(rf: PipelineResource<RegisterFile>) -> Self { 
+        Self { stall: false, next_id: 0, rf } 
+    }
 }
-impl PipelineStage for DecodeStage {
+impl SimplePipelineStage for DecodeStage {
     type In  = RvInstr;
-    type Out = Op;
+    type Out = Instruction;
     fn execute(&mut self, i: Self::In) -> Self::Out {
         let rf = self.rf.borrow();
-        match i {
+        let op = match i {
             RvInstr::Op(rd, rs1, rs2, op) => 
                 Op::Alu(rd.0, rf[rs1.0], rf[rs2.0], op.to_alu_op()),
             RvInstr::OpImm(rd, rs1, imm, op) => 
@@ -86,19 +95,28 @@ impl PipelineStage for DecodeStage {
             RvInstr::Store(rs1, rs2, imm, w) => 
                 Op::Store(rf[rs2.0], rf[rs1.0], imm, w.to_width()),
             _ => unimplemented!(),
-        }
+        };
+
+        let id = self.next_id;
+        self.next_id += 1;
+        Instruction { op, id }
     }
+    fn stall(&mut self) { self.stall = true }
+    fn unstall(&mut self) { self.stall = false }
+
 }
 
-pub struct ExecutionStage {}
-impl ExecutionStage {
-    pub fn new() -> Self { Self { } }
+pub struct ExecutionStage {
+    stall: bool,
 }
-impl PipelineStage for ExecutionStage {
-    type In  = Op;
+impl ExecutionStage {
+    pub fn new() -> Self { Self { stall: false } }
+}
+impl SimplePipelineStage for ExecutionStage {
+    type In  = Instruction;
     type Out = Effect;
     fn execute(&mut self, i: Self::In) -> Self::Out {
-        match i {
+        match i.op {
             Op::Alu(rd, x, y, aluop) => {
                 let res = match aluop {
                     ALUOp::Add => x.wrapping_add(y),
@@ -129,15 +147,21 @@ impl PipelineStage for ExecutionStage {
             _ => unimplemented!(),
         }
     }
+    fn stall(&mut self) { self.stall = true }
+    fn unstall(&mut self) { self.stall = false }
+
 }
 
 pub struct MemoryStage {
+    stall: bool,
     dmem: PipelineResource<DataMemory>,
 }
 impl MemoryStage {
-    pub fn new(dmem: PipelineResource<DataMemory>) -> Self { Self { dmem } }
+    pub fn new(dmem: PipelineResource<DataMemory>) -> Self { 
+        Self { stall: false, dmem } 
+    }
 }
-impl PipelineStage for MemoryStage {
+impl SimplePipelineStage for MemoryStage {
     type In = Effect;
     type Out = Effect;
     fn execute(&mut self, i: Self::In) -> Self::Out {
@@ -167,16 +191,22 @@ impl PipelineStage for MemoryStage {
             _ => i,
         }
     }
+    fn stall(&mut self) { self.stall = true }
+    fn unstall(&mut self) { self.stall = false }
+
 }
 
 
 pub struct WritebackStage {
+    stall: bool,
     rf: PipelineResource<RegisterFile>,
 }
 impl WritebackStage {
-    pub fn new(rf: PipelineResource<RegisterFile>) -> Self { Self { rf } }
+    pub fn new(rf: PipelineResource<RegisterFile>) -> Self { 
+        Self { stall: false, rf } 
+    }
 }
-impl PipelineStage for WritebackStage {
+impl SimplePipelineStage for WritebackStage {
     type In = Effect;
     type Out = ();
     fn execute(&mut self, i: Self::In) -> Self::Out {
@@ -189,6 +219,8 @@ impl PipelineStage for WritebackStage {
             _ => unimplemented!("{:?}", i),
         }
     }
+    fn stall(&mut self) { self.stall = true }
+    fn unstall(&mut self) { self.stall = false }
 }
 
 
