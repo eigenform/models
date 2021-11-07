@@ -1,2 +1,5 @@
 target/
 *.lock
+*.bin
+*.elf
+*.o
