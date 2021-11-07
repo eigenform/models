@@ -2,7 +2,6 @@
 pub mod alu;
 pub mod lsu;
 pub mod storage;
-pub mod traits;
 
 /// Representing the state of some architectural register.
 #[derive(Clone, Copy)]

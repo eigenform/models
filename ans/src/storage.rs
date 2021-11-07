@@ -1,6 +1,4 @@
 
-
-
 pub trait VirtualStorage {
     fn resolve(&self, idx: usize) -> Option<u32>;
     fn allocate(&mut self) -> Option<usize>;
@@ -19,7 +17,7 @@ pub trait ArchitecturalStorage {
 
 #[cfg(test)]
 mod test {
-    use crate::traits::*;
+    use crate::storage::*;
 
     #[derive(Copy, Clone)]
     pub enum ArchRegValue { Valid(u32), Name(usize) }
