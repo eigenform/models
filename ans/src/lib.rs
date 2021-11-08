@@ -35,9 +35,9 @@ mod tests {
         }
 
         let mut pc = entry;
-        for i in 0..24 {
+        for i in 0..32 {
             let inst = RvEncoding(ram.read32(pc));
-            inst.decode();
+            println!("{:x?}", inst.decode());
             pc += 4;
         }
 

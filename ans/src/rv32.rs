@@ -70,7 +70,6 @@ impl From<u32> for RvOpcode {
 
 pub enum RvEncodingFormat { R, I, S, U, B, J }
 
-
 #[repr(transparent)]
 pub struct RvEncoding(pub u32);
 impl RvEncoding {
@@ -121,7 +120,6 @@ impl RvEncoding {
     pub fn f7(&self) -> u32 {
         (self.0 & 0b1111_111_00000_00000_000_00000_00000_00) >> 25
     }
-
     pub fn uimm(&self) -> u32 {
         (self.0 & 0b1111_1111_1111_1111_1111_0000_0000_0000) >> 12
     }
@@ -130,19 +128,16 @@ impl RvEncoding {
         fn sext32(x: u32, bits: u32) -> i32 {
             ((x << (32 - bits)) as i32) >> (32 - bits)
         }
-
         match self.fmt() {
             RvEncodingFormat::I => {
                 let imm = (self.0 & 0xfff0_0000) >> 20;
                 let imm = sext32(imm, 12);
-                //println!("{:08x} ({})", imm, imm);
                 imm
             },
             RvEncodingFormat::S => {
                 let hi  = (self.0 & 0xfe00_0000) >> 20;
                 let lo  = (self.0 & 0x0000_0f80) >> 7;
                 let imm = sext32((hi | lo), 12);
-                //println!("{:08x} ({})", imm, imm);
                 imm
             },
             RvEncodingFormat::J => { 
@@ -152,28 +147,31 @@ impl RvEncoding {
                 let imm19_12 = ((self.0 & 0x000f_f000) >> 12) << 12;
                 let tmp = imm20 | imm19_12 | imm11 | imm10_1;
                 let imm = sext32(tmp, 21);
-                //println!("{:08x} ({})", imm, imm);
                 imm
             },
-            //RvEncodingFormat::B => { },
+            RvEncodingFormat::B => { 
+                let imm12   = ((self.0 & 0x8000_0000) >> 31) << 12;
+                let imm10_5 = ((self.0 & 0x7c00_0000) >> 25) << 5;
+                let imm4_1  = ((self.0 & 0x0000_0f00) >> 8) << 1;
+                let imm11   = ((self.0 & 0x0000_0080) >> 7) << 11;
+                let tmp = imm12 | imm11 | imm10_5 | imm4_1;
+                let imm = sext32(tmp, 12);
+                imm
+            },
             _ => unimplemented!(),
         }
     }
-
 }
+
 impl RvEncoding {
     pub fn decode(&self) -> RvInstr {
-        let op = self.opcode();
-        let f3 = self.f3();
-        let f7 = self.f7();
-        println!("{:?}", self.opcode());
-        match op {
+        match self.opcode() {
             RvOpcode::OP => {
-                let alu_op = RvALUOp::from(f3);
+                let alu_op = RvALUOp::from((self.f3(), self.f7()));
                 RvInstr::Op(self.rd(), self.rs1(), self.rs2(), alu_op)
             },
             RvOpcode::OP_IMM => {
-                let alu_op = RvALUOp::from(f3);
+                let alu_op = RvALUOp::from((self.f3(), 0b0000000));
                 RvInstr::OpImm(self.rd(), self.rs1(), self.simm(), alu_op)
             },
             RvOpcode::LOAD => {
@@ -190,7 +188,15 @@ impl RvEncoding {
             RvOpcode::LUI => {
                 RvInstr::Lui(self.rd(), self.uimm())
             }
-            _ => unimplemented!(),
+            RvOpcode::BRANCH => {
+                let br_op = RvBranchOp::from(self.f3());
+                RvInstr::Branch(self.rs1(), self.rs2(), self.simm(), br_op)
+            }
+            RvOpcode::JALR => {
+                assert!(self.f3() == 0b000);
+                RvInstr::Jalr(self.rd(), self.rs1(), self.simm())
+            },
+            _ => unimplemented!("Unimplemented opcode {:?}", self.opcode()),
         }
     }
 }
@@ -218,31 +224,66 @@ impl From<u32> for RvWidth {
 pub enum RvALUOp {
     Add,
     Sub,
+
     Sll,
     Slt,
     Sltu,
     Xor,
+
     Srl,
     Sra,
+
     Or,
     And,
-    Srx,
 }
-impl From<u32> for RvALUOp {
+impl From<(u32, u32)> for RvALUOp {
+    fn from(x: (u32, u32)) -> Self {
+        match x {
+            (0b000, 0b0000000) => Self::Add,
+            (0b000, 0b0100000) => Self::Sub,
+
+            (0b001, 0b0000000) => Self::Sll,
+            (0b010, 0b0000000) => Self::Slt,
+            (0b011, 0b0000000) => Self::Sltu,
+            (0b100, 0b0000000) => Self::Xor,
+
+            (0b101, 0b0000000) => Self::Srl,
+            (0b101, 0b0100000) => Self::Sra,
+
+            (0b110, 0b0000000) => Self::Or,
+            (0b111, 0b0000000) => Self::And,
+            _ => unimplemented!("ALU op f3={:03b} f7={:07b}", x.0, x.1),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum RvBranchOp {
+    Eq,
+    Ne,
+    Lt,
+    Ge,
+    Ltu,
+    Geu,
+}
+impl From<u32> for RvBranchOp {
     fn from(x: u32) -> Self {
         match x {
-            0b000 => Self::Add,
-            0b001 => Self::Sll,
-            0b010 => Self::Slt,
-            0b011 => Self::Sltu,
-            0b100 => Self::Xor,
-            0b101 => Self::Srx,
-            0b110 => Self::Or,
-            0b111 => Self::And,
+            0b000 => Self::Eq,
+            0b001 => Self::Ne,
+            0b010 => unimplemented!(),
+            0b011 => unimplemented!(),
+            0b100 => Self::Lt,
+            0b101 => Self::Ge,
+            0b110 => Self::Ltu,
+            0b111 => Self::Geu,
             _ => unimplemented!(),
         }
     }
 }
+
+
+
 
 #[derive(Clone, Copy, Debug)]
 pub struct RvReg(pub usize);
@@ -252,17 +293,25 @@ pub struct RvReg(pub usize);
 pub enum RvInstr {
     /// ALU operation
     Op(RvReg, RvReg, RvReg, RvALUOp),
+
     /// ALU operation with immediate
     OpImm(RvReg, RvReg, i32, RvALUOp),
-    /// Load upper immediate
-    Lui(RvReg, u32),
     /// Memory load
     Load(RvReg, RvReg, i32, RvWidth),
+    /// Jump-and-link register
+    Jalr(RvReg, RvReg, i32),
+
+    /// Load upper immediate
+    Lui(RvReg, u32),
+
     /// Memory store
     Store(RvReg, RvReg, i32, RvWidth),
 
     /// Jump-and-link
     Jal(RvReg, i32),
+
+    /// Conditional branch
+    Branch(RvReg, RvReg, i32, RvBranchOp),
 }
 
 
