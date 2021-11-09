@@ -79,17 +79,14 @@ pub enum ControlEffect {
 }
 
 
-#[cfg(test)]
-mod test {
-    use crate::effects::*;
-
-
-
-    #[test]
-    fn test() {
-        let mut bb = BasicBlock::default();
-    }
-}
+//#[cfg(test)]
+//mod test {
+//    use crate::effects::*;
+//    #[test]
+//    fn test() {
+//        let mut bb = BasicBlock::default();
+//    }
+//}
 
 
 
