@@ -1,4 +1,15 @@
 
+pub struct Mmu {
+}
+impl Mmu {
+    pub fn new() -> Self {
+        Self {
+        }
+    }
+}
+
+
+/// A simple emulated memory device.
 pub struct Memory {
     pub data: Vec<u8>,
 }
@@ -20,6 +31,25 @@ impl Memory {
     }
 
 }
+
+impl Memory {
+    pub fn load_elf(&mut self, filename: &str) -> u32 {
+        use std::fs;
+        use object::{Object, ObjectSegment};
+        let elf_data = fs::read(filename).unwrap();
+        let elf = object::File::parse(&*elf_data).unwrap();
+        for segment in elf.segments() {
+            let addr = segment.address() as usize;
+            let data = segment.data().unwrap();
+            println!("Loading segment @ {:08x} ({:08x} bytes)", 
+                     addr, data.len());
+            self.write(addr, data);
+        }
+        elf.entry() as u32
+    }
+}
+
+
 impl Memory {
     pub fn load8(&self, addr: usize) -> u8 {
         self.data[addr]
@@ -46,4 +76,6 @@ impl Memory {
         self.data[addr..addr + 4].copy_from_slice(&val.to_le_bytes());
     }
 }
+
+
 

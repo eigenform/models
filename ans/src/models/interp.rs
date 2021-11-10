@@ -10,7 +10,7 @@ impl RvRegs {
     pub fn new() -> Self {
         let mut res = Self { data: [0; 32] };
         res.data[1] = 0xdead_0000;
-        res.data[2] = 0x000f_0000;
+        res.data[2] = 0x0030_0000;
         res
     }
     pub fn read(&self, idx: RvReg) -> u32 {
@@ -33,39 +33,34 @@ pub enum StepResult {
 
 /// Simple interpreting-style evaluator/virtual machine for RV32I programs.
 ///
+/// In this model, [Interpreter::step] fetches and single instruction from
+/// memory and executes it (producing some effect on the [data-like] state of 
+/// the machine). Then, a [StepResult] indicates some effect on the control 
+/// state of the machine.
 ///
 pub struct Interpreter {
-    /// Program counter
+    /// Program counter.
     pc:  u32,
-    /// Register file
+    /// Register file.
     reg: RvRegs,
-    /// Simple emulated memory device
+    /// Simple emulated memory device.
     ram: Memory,
 }
 impl Interpreter {
-
     pub fn new() -> Self {
         Self { 
             pc:  0,
             reg: RvRegs::new(),
-            ram: Memory::new(0x0010_0000),
+            ram: Memory::new(0x0040_0000),
         }
     }
 
-    pub fn load_elf(&mut self, filename: &'static str) {
-        let elf_data = fs::read(filename).unwrap();
-        let elf = object::File::parse(&*elf_data).unwrap();
-        // NOTE: This is fine, for now
-        for section in elf.sections() {
-            if let object::SectionFlags::Elf { sh_flags } = section.flags() {
-                if ((sh_flags as u32) & SHF_ALLOC == SHF_ALLOC) {
-                    let data = section.data().unwrap();
-                    let addr: usize = section.address().try_into().unwrap();
-                    self.ram.write(addr, data);
-                }
-            }
-        }
-        self.pc = elf.entry() as u32;
+    /// Load an RV32 ELF file into memory.
+    ///
+    /// Sets the program counter to the ELF entrypoint.
+    pub fn load_elf(&mut self, filename: &str) {
+        let entrypt = self.ram.load_elf(filename);
+        self.pc = entrypt;
     }
 
     /// Evaluate the result of some ALU operation
@@ -97,7 +92,6 @@ impl Interpreter {
         }
     }
 
-
     /// Fetch and execute the instruction at the address specified by the 
     /// program counter, returning a [StepResult].
     pub fn step(&mut self) -> StepResult {
@@ -121,7 +115,8 @@ impl Interpreter {
             }
             RvInstr::Store(rs1, rs2, imm, width) => {
                 let val  = self.reg.read(rs2);
-                let addr = self.reg.read(rs1).wrapping_add(imm as u32) as usize;
+                let addr = self.reg.read(rs1)
+                    .wrapping_add(imm as u32) as usize;
                 match width {
                     RvWidth::Byte => self.ram.store8(addr, val as u8),
                     RvWidth::Half => self.ram.store16(addr, val as u16),
@@ -130,7 +125,8 @@ impl Interpreter {
                 StepResult::Next
             },
             RvInstr::Load(rd, rs1, imm, width) => {
-                let addr = self.reg.read(rs1).wrapping_add(imm as u32) as usize;
+                let addr = self.reg.read(rs1)
+                    .wrapping_add(imm as u32) as usize;
                 let res  = match width {
                     RvWidth::Byte => self.ram.load8(addr)  as u32,
                     RvWidth::Half => self.ram.load16(addr) as u32,
@@ -140,6 +136,7 @@ impl Interpreter {
                 StepResult::Next
             },
             RvInstr::Jal(rd, imm) => {
+                println!("{}", imm);
                 if rd.0 != 0 {
                     self.reg.write(rd, self.pc.wrapping_add(4));
                 }
@@ -172,25 +169,19 @@ impl Interpreter {
 
     /// Run the machine indefinitely until it halts.
     pub fn run(&mut self) {
+        let mut instrs: usize = 0;
         loop {
             if self.pc == 0xdead_0000 { break; }
             let res = self.step();
+            instrs += 1;
             match res {
                 StepResult::Next      => self.pc = self.pc.wrapping_add(4),
                 StepResult::Goto(pc)  => self.pc = pc,
                 StepResult::Terminate => break,
             }
         }
+        println!("{} instrs", instrs);
+        println!("{:08x?}", self.reg.data);
     }
 }
 
-#[cfg(test)]
-mod test {
-    use crate::models::interp::*;
-    #[test]
-    fn test() {
-        let mut vm = Interpreter::new();
-        vm.load_elf("./rv32/test.elf");
-        vm.run();
-    }
-}

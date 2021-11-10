@@ -143,15 +143,17 @@ impl RvEncoding {
             RvEncodingFormat::J => { 
                 let imm20    = ((self.0 & 0x8000_0000) >> 31) << 20;
                 let imm10_1  = ((self.0 & 0x7fe0_0000) >> 21) << 1;
-                let imm11    = ((self.0 & 0x0010_0000) >> 20) << 1;
+                let imm11    = ((self.0 & 0x0010_0000) >> 20) << 11;
                 let imm19_12 = ((self.0 & 0x000f_f000) >> 12) << 12;
                 let tmp = imm20 | imm19_12 | imm11 | imm10_1;
+                println!("{:08x}", tmp);
                 let imm = sext32(tmp, 21);
+                println!("{:08x} ({})", imm, imm);
                 imm
             },
             RvEncodingFormat::B => { 
                 let imm12   = ((self.0 & 0x8000_0000) >> 31) << 12;
-                let imm10_5 = ((self.0 & 0x7c00_0000) >> 25) << 5;
+                let imm10_5 = ((self.0 & 0x7e00_0000) >> 25) << 5;
                 let imm4_1  = ((self.0 & 0x0000_0f00) >> 8) << 1;
                 let imm11   = ((self.0 & 0x0000_0080) >> 7) << 11;
                 let tmp = imm12 | imm11 | imm10_5 | imm4_1;
@@ -176,6 +178,7 @@ impl RvEncoding {
             },
             RvOpcode::LOAD => {
                 let w   = RvWidth::from(self.f3());
+                println!("{:08x}", self.0);
                 RvInstr::Load(self.rd(), self.rs1(), self.simm(), w)
             },
             RvOpcode::STORE => {
